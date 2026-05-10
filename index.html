@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>歷史地圖 · Historical Atlas</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;600&family=Cinzel:wght@400;600&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --gold:#c9a84c;
+  --gold-light:#e8d5a3;
+  --dark:#1a1510;
+  --dark2:#252018;
+  --dark3:#2f2920;
+  --parchment:#f5edd8;
+  --parchment2:#ede0c4;
+  --ink:#3d2e1a;
+  --red:#8b3a2a;
+  --panel-w:380px;
+  --timeline-h:90px;
+}
+html,body{height:100%;overflow:hidden;background:var(--dark);font-family:'Noto Sans TC',sans-serif}
+
+/* ── 頂部標題列 ── */
+#topbar{
+  position:fixed;top:0;left:0;right:0;height:52px;
+  background:linear-gradient(180deg,#1a1510 0%,#252018 100%);
+  border-bottom:1px solid var(--gold);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;z-index:1000;
+}
+#topbar h1{
+  font-family:'Cinzel',serif;font-size:18px;font-weight:600;
+  color:var(--gold);letter-spacing:3px;
+}
+#topbar h1 span{font-family:'Noto Serif TC',serif;font-size:14px;font-weight:300;color:var(--gold-light);margin-left:12px;letter-spacing:1px}
+
+#lang-btn{
+  background:transparent;border:1px solid var(--gold);
+  color:var(--gold);padding:5px 14px;border-radius:3px;
+  font-size:12px;cursor:pointer;letter-spacing:2px;
+  font-family:'Cinzel',serif;transition:all .2s;
+}
+#lang-btn:hover{background:var(--gold);color:var(--dark)}
+
+/* ── 地圖主體 ── */
+#map{
+  position:fixed;
+  top:52px;left:0;right:var(--panel-w);
+  bottom:var(--timeline-h);
+}
+
+/* ── 側欄 ── */
+#panel{
+  position:fixed;top:52px;right:0;width:var(--panel-w);
+  bottom:var(--timeline-h);
+  background:var(--dark2);
+  border-left:1px solid #4a3e2a;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+#panel-header{
+  padding:18px 20px 14px;
+  border-bottom:1px solid #3a3020;
+  flex-shrink:0;
+}
+#panel-title{
+  font-family:'Cinzel',serif;font-size:14px;color:var(--gold);
+  letter-spacing:2px;margin-bottom:4px;
+}
+#panel-subtitle{font-size:11px;color:#7a6a50;letter-spacing:1px}
+
+#panel-content{flex:1;overflow-y:auto;padding:0}
+#panel-content::-webkit-scrollbar{width:4px}
+#panel-content::-webkit-scrollbar-track{background:var(--dark2)}
+#panel-content::-webkit-scrollbar-thumb{background:#4a3e2a;border-radius:2px}
+
+#welcome{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;padding:30px;text-align:center;
+}
+#welcome .compass{font-size:48px;margin-bottom:16px;opacity:.4}
+#welcome p{font-size:13px;color:#6a5a40;line-height:1.8}
+#welcome p span{display:block;font-family:'Cinzel',serif;font-size:11px;letter-spacing:2px;color:#4a3e28;margin-top:8px}
+
+/* 側欄條目卡片 */
+#entry-card{display:none;padding:20px}
+#entry-type-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:10px;letter-spacing:2px;color:var(--gold);
+  border:1px solid #4a3e2a;border-radius:2px;
+  padding:3px 10px;margin-bottom:14px;
+  font-family:'Cinzel',serif;
+}
+#entry-name{
+  font-family:'Noto Serif TC',serif;font-size:20px;
+  font-weight:400;color:var(--parchment);
+  line-height:1.4;margin-bottom:6px;
+}
+#entry-name-en{font-size:13px;color:#7a6a50;margin-bottom:16px;letter-spacing:.5px}
+#entry-year{font-size:12px;color:var(--gold-light);margin-bottom:16px;letter-spacing:1px}
+
+#entry-img-wrap{
+  width:100%;height:180px;background:var(--dark3);
+  border-radius:4px;margin-bottom:16px;overflow:hidden;
+  display:none;border:1px solid #3a3020;
+}
+#entry-img-wrap img{width:100%;height:100%;object-fit:cover;opacity:.9}
+
+#entry-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.tag{
+  font-size:10px;padding:3px 10px;border-radius:2px;
+  background:#2f2920;border:1px solid #3a3020;
+  color:#9a8a6a;letter-spacing:1px;
+}
+
+#entry-extract{
+  font-size:13px;line-height:1.9;color:#c0a880;
+  border-left:2px solid #4a3e2a;padding-left:14px;
+  margin-bottom:18px;
+}
+#entry-extract.loading{
+  color:#5a4a30;font-style:italic;letter-spacing:.5px;
+}
+
+#entry-links{display:flex;gap:10px;flex-wrap:wrap}
+.entry-link{
+  font-size:11px;padding:6px 14px;border-radius:3px;
+  border:1px solid #4a3e2a;color:var(--gold-light);
+  text-decoration:none;display:inline-flex;align-items:center;gap:5px;
+  cursor:pointer;background:transparent;transition:all .2s;
+  letter-spacing:1px;font-family:'Cinzel',serif;
+}
+.entry-link:hover{background:#3a3020;border-color:var(--gold)}
+
+/* ── 時間軸 ── */
+#timeline-bar{
+  position:fixed;bottom:0;left:0;right:0;height:var(--timeline-h);
+  background:linear-gradient(0deg,#0f0d08 0%,#1a1510 100%);
+  border-top:1px solid var(--gold);
+  display:flex;align-items:center;gap:0;z-index:1000;
+  padding:0 20px;
+}
+#play-btn{
+  background:transparent;border:1px solid var(--gold);
+  color:var(--gold);width:36px;height:36px;border-radius:50%;
+  font-size:16px;cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .2s;margin-right:16px;
+}
+#play-btn:hover{background:var(--gold);color:var(--dark)}
+
+#year-display{
+  font-family:'Cinzel',serif;font-size:22px;font-weight:600;
+  color:var(--gold);min-width:110px;text-align:center;
+  flex-shrink:0;letter-spacing:2px;line-height:1;
+}
+#year-era{font-size:10px;color:#7a6a50;letter-spacing:3px;margin-top:4px}
+
+#slider-wrap{flex:1;margin:0 20px;position:relative}
+#year-slider{
+  width:100%;-webkit-appearance:none;appearance:none;
+  height:3px;background:linear-gradient(90deg,#4a3e2a 0%,#6a5a3a 100%);
+  border-radius:2px;outline:none;cursor:pointer;
+}
+#year-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+  background:var(--gold);border:2px solid var(--dark);
+  box-shadow:0 0 10px rgba(201,168,76,.5);cursor:grab;
+}
+#year-slider::-webkit-slider-thumb:active{cursor:grabbing}
+#slider-labels{
+  display:flex;justify-content:space-between;
+  padding:6px 0 0;font-size:9px;color:#4a3e2a;
+  font-family:'Cinzel',serif;letter-spacing:1px;
+}
+
+/* ── 圖例 ── */
+#legend{
+  position:fixed;bottom:calc(var(--timeline-h) + 10px);left:10px;
+  background:rgba(26,21,16,.9);border:1px solid #3a3020;
+  border-radius:4px;padding:10px 14px;z-index:900;
+}
+.legend-item{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:11px;color:#9a8a6a}
+.legend-item:last-child{margin-bottom:0}
+.legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:2px solid rgba(255,255,255,.3)}
+
+/* ── 篩選按鈕 ── */
+#filter-bar{
+  position:fixed;top:62px;left:10px;
+  display:flex;flex-direction:column;gap:6px;z-index:900;
+}
+.filter-btn{
+  background:rgba(26,21,16,.88);border:1px solid #3a3020;
+  color:#9a8a6a;font-size:10px;padding:5px 10px;
+  border-radius:3px;cursor:pointer;letter-spacing:1px;
+  font-family:'Cinzel',serif;transition:all .2s;
+  display:flex;align-items:center;gap:5px;
+}
+.filter-btn.active{background:rgba(201,168,76,.15);border-color:var(--gold);color:var(--gold)}
+.filter-btn:hover{border-color:#6a5a3a;color:var(--gold-light)}
+
+/* ── 載入指示 ── */
+#loading-overlay{
+  position:fixed;inset:0;background:var(--dark);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:9999;transition:opacity .5s;
+}
+#loading-overlay h2{
+  font-family:'Cinzel',serif;font-size:24px;color:var(--gold);
+  letter-spacing:6px;margin-bottom:8px;
+}
+#loading-overlay p{font-size:12px;color:#6a5a40;letter-spacing:3px}
+.loading-bar{
+  width:200px;height:2px;background:#2a2015;margin-top:20px;border-radius:1px;overflow:hidden;
+}
+.loading-bar-inner{
+  height:100%;background:var(--gold);border-radius:1px;
+  animation:loadpulse 1.5s ease-in-out infinite;
+}
+@keyframes loadpulse{0%{width:0}50%{width:100%}100%{width:0}}
+
+/* ── Leaflet 自訂 ── */
+.leaflet-control-zoom a{
+  background:var(--dark2)!important;color:var(--gold)!important;
+  border-color:#3a3020!important;
+}
+.leaflet-control-zoom a:hover{background:var(--dark3)!important}
+.leaflet-popup-content-wrapper{
+  background:var(--dark2);border:1px solid var(--gold);
+  border-radius:4px;box-shadow:0 4px 20px rgba(0,0,0,.5);
+}
+.leaflet-popup-tip{background:var(--dark2)}
+.leaflet-popup-content{color:var(--parchment);font-family:'Noto Sans TC',sans-serif;margin:10px 14px}
+
+/* 自訂 marker */
+.hm-marker{
+  width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;border:2px solid rgba(255,255,255,.35);
+  cursor:pointer;transition:transform .15s;
+  box-shadow:0 2px 8px rgba(0,0,0,.5);
+}
+.hm-marker:hover{transform:scale(1.2)}
+.hm-marker.event{background:#7a2a1a}
+.hm-marker.person{background:#1a4a6a}
+.hm-marker.artifact{background:#3a5a2a}
+.hm-marker.building{background:#4a3a6a}
+.hm-marker.regime{background:#6a4a1a}
+
+/* 政權 polygon tooltip */
+.regime-tooltip{
+  background:rgba(26,21,16,.85)!important;
+  border:1px solid var(--gold)!important;
+  color:var(--gold)!important;
+  font-family:'Cinzel',serif!important;
+  font-size:11px!important;letter-spacing:1px!important;
+  border-radius:3px!important;
+  box-shadow:none!important;padding:4px 10px!important;
+}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay">
+  <h2>HISTORICAL ATLAS</h2>
+  <p data-zh="歷史地圖 載入中" data-en="Loading Historical Map">歷史地圖 載入中</p>
+  <div class="loading-bar"><div class="loading-bar-inner"></div></div>
+</div>
+
+<!-- 頂部標題列 -->
+<div id="topbar">
+  <h1>HISTORICAL ATLAS <span id="topbar-sub">世界歷史地圖</span></h1>
+  <button id="lang-btn" onclick="toggleLang()">EN</button>
+</div>
+
+<!-- 篩選器 -->
+<div id="filter-bar">
+  <button class="filter-btn active" data-type="event" onclick="toggleFilter(this,'event')">⚔ <span data-zh="事件" data-en="Events">事件</span></button>
+  <button class="filter-btn active" data-type="person" onclick="toggleFilter(this,'person')">◎ <span data-zh="人物" data-en="People">人物</span></button>
+  <button class="filter-btn active" data-type="artifact" onclick="toggleFilter(this,'artifact')">⬡ <span data-zh="文物" data-en="Artifacts">文物</span></button>
+  <button class="filter-btn active" data-type="building" onclick="toggleFilter(this,'building')">▲ <span data-zh="建築" data-en="Buildings">建築</span></button>
+  <button class="filter-btn active" data-type="regime" onclick="toggleFilter(this,'regime')">✦ <span data-zh="政權" data-en="Regimes">政權</span></button>
+</div>
+
+<!-- 地圖 -->
+<div id="map"></div>
+
+<!-- 圖例 -->
+<div id="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#7a2a1a"></div><span data-zh="歷史事件" data-en="Events">歷史事件</span></div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1a4a6a"></div><span data-zh="人物出生地" data-en="Person Birthplace">人物出生地</span></div>
+  <div class="legend-item"><div class="legend-dot" style="background:#3a5a2a"></div><span data-zh="文物出土點" data-en="Artifact Site">文物出土點</span></div>
+  <div class="legend-item"><div class="legend-dot" style="background:#4a3a6a"></div><span data-zh="建築物位置" data-en="Buildings">建築物位置</span></div>
+  <div class="legend-item"><div class="legend-dot" style="background:#6a4a1a"></div><span data-zh="政權中心" data-en="Regime Capital">政權中心</span></div>
+</div>
+
+<!-- 右側資訊面板 -->
+<div id="panel">
+  <div id="panel-header">
+    <div id="panel-title" data-zh="歷史條目" data-en="Historical Entry">歷史條目</div>
+    <div id="panel-subtitle" data-zh="點擊地圖上的標記查看詳情" data-en="Click a marker to view details">點擊地圖上的標記查看詳情</div>
+  </div>
+  <div id="panel-content">
+    <div id="welcome">
+      <div class="compass">🧭</div>
+      <p>
+        <span data-zh="拖動時間軸探索歷史" data-en="Drag the timeline to explore history">拖動時間軸探索歷史</span>
+        <span data-zh="點擊任何標記查看詳情" data-en="Click any marker for details">點擊任何標記查看詳情</span>
+        <span data-zh="使用篩選器控制顯示類型" data-en="Use filters to control marker types">使用篩選器控制顯示類型</span>
+      </p>
+    </div>
+    <div id="entry-card">
+      <div id="entry-type-badge"></div>
+      <div id="entry-name"></div>
+      <div id="entry-name-en"></div>
+      <div id="entry-year"></div>
+      <div id="entry-img-wrap"><img id="entry-img" src="" alt=""></div>
+      <div id="entry-tags"></div>
+      <div id="entry-extract"></div>
+      <div id="entry-links"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 時間軸 -->
+<div id="timeline-bar">
+  <button id="play-btn" onclick="togglePlay()" title="播放">▶</button>
+  <div>
+    <div id="year-display">500</div>
+    <div id="year-era" data-zh="西元" data-en="CE">西元</div>
+  </div>
+  <div id="slider-wrap">
+    <input type="range" id="year-slider" min="-3000" max="2000" value="500" step="10">
+    <div id="slider-labels">
+      <span>3000 BCE</span><span>2000 BCE</span><span>1000 BCE</span>
+      <span>1 CE</span><span>500</span><span>1000</span><span>1500</span><span>2000</span>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════
+//  設定 & 全域狀態
+// ═══════════════════════════════════════════════════════
+let currentLang = 'zh';
+let currentYear = 500;
+let playing = false;
+let playTimer = null;
+let activeFilters = new Set(['event','person','artifact','building','regime']);
+let allMarkers = [];
+let regimeLayers = [];
+let map;
+
+// ═══════════════════════════════════════════════════════
+//  內建歷史資料（150+ 筆）
+// ═══════════════════════════════════════════════════════
+const HISTORY_DATA = [
+  // ── 古文明 ──
+  {id:'pyramids',type:'building',lat:29.9792,lng:31.1342,year:-2560,endYear:2100,
+   zh:'吉薩大金字塔',en:'Great Pyramid of Giza',
+   tags_zh:['古埃及','建築','世界遺產'],tags_en:['Ancient Egypt','Architecture','UNESCO'],
+   wiki_zh:'吉薩大金字塔',wiki_en:'Great_Pyramid_of_Giza'},
+  {id:'hammurabi',type:'person',lat:32.5421,lng:44.4209,year:-1810,endYear:-1750,
+   zh:'漢摩拉比',en:'Hammurabi',
+   tags_zh:['巴比倫','法律','美索不達米亞'],tags_en:['Babylon','Law','Mesopotamia'],
+   wiki_zh:'漢摩拉比',wiki_en:'Hammurabi'},
+  {id:'hammurabi_code',type:'artifact',lat:32.0,lng:44.0,year:-1754,endYear:2100,
+   zh:'漢摩拉比法典石碑',en:'Code of Hammurabi',
+   tags_zh:['美索不達米亞','法律','文物'],tags_en:['Mesopotamia','Law','Artifact'],
+   wiki_zh:'漢謨拉比法典',wiki_en:'Code_of_Hammurabi'},
+  {id:'troy_fall',type:'event',lat:39.9576,lng:26.2385,year:-1200,endYear:-1200,
+   zh:'特洛伊陷落',en:'Fall of Troy',
+   tags_zh:['希臘','戰爭','神話'],tags_en:['Greece','War','Mythology'],
+   wiki_zh:'特洛伊戰爭',wiki_en:'Trojan_War'},
+  {id:'homer',type:'person',lat:38.4,lng:26.1,year:-800,endYear:-701,
+   zh:'荷馬',en:'Homer',
+   tags_zh:['古希臘','詩人','史詩'],tags_en:['Ancient Greece','Poet','Epic'],
+   wiki_zh:'荷馬',wiki_en:'Homer'},
+  {id:'parthenon',type:'building',lat:37.9715,lng:23.7267,year:-432,endYear:2100,
+   zh:'帕德嫩神廟',en:'Parthenon',
+   tags_zh:['古希臘','建築','雅典'],tags_en:['Ancient Greece','Architecture','Athens'],
+   wiki_zh:'帕德嫩神廟',wiki_en:'Parthenon'},
+  {id:'socrates',type:'person',lat:37.9838,lng:23.7275,year:-470,endYear:-399,
+   zh:'蘇格拉底',en:'Socrates',
+   tags_zh:['古希臘','哲學','雅典'],tags_en:['Ancient Greece','Philosophy','Athens'],
+   wiki_zh:'蘇格拉底',wiki_en:'Socrates'},
+  {id:'alexander',type:'person',lat:40.6401,lng:22.944,year:-356,endYear:-323,
+   zh:'亞歷山大大帝',en:'Alexander the Great',
+   tags_zh:['馬其頓','征服者','希臘化'],tags_en:['Macedonia','Conqueror','Hellenistic'],
+   wiki_zh:'亞歷山大大帝',wiki_en:'Alexander_the_Great'},
+  {id:'alexander_death',type:'event',lat:33.3152,lng:44.3661,year:-323,endYear:-323,
+   zh:'亞歷山大大帝逝世',en:'Death of Alexander the Great',
+   tags_zh:['馬其頓','巴比倫','帝國'],tags_en:['Macedonia','Babylon','Empire'],
+   wiki_zh:'亞歷山大大帝之死',wiki_en:'Death_of_Alexander_the_Great'},
+  {id:'qinshihuang',type:'person',lat:34.3416,lng:108.9398,year:-259,endYear:-210,
+   zh:'秦始皇',en:'Qin Shi Huang',
+   tags_zh:['秦朝','中國','統一'],tags_en:['Qin Dynasty','China','Unification'],
+   wiki_zh:'秦始皇',wiki_en:'Qin_Shi_Huang'},
+  {id:'terracotta',type:'artifact',lat:34.3842,lng:109.2734,year:-210,endYear:2100,
+   zh:'兵馬俑',en:'Terracotta Army',
+   tags_zh:['秦朝','中國','考古'],tags_en:['Qin Dynasty','China','Archaeology'],
+   wiki_zh:'兵馬俑',wiki_en:'Terracotta_Army'},
+  {id:'great_wall',type:'building',lat:40.4319,lng:116.5704,year:-221,endYear:2100,
+   zh:'萬里長城',en:'Great Wall of China',
+   tags_zh:['中國','建築','防禦'],tags_en:['China','Architecture','Defense'],
+   wiki_zh:'長城',wiki_en:'Great_Wall_of_China'},
+  {id:'julius_caesar',type:'person',lat:41.9028,lng:12.4964,year:-100,endYear:-44,
+   zh:'凱撒',en:'Julius Caesar',
+   tags_zh:['羅馬','政治','軍事'],tags_en:['Rome','Politics','Military'],
+   wiki_zh:'尤利烏斯·凱撒',wiki_en:'Julius_Caesar'},
+  {id:'caesar_death',type:'event',lat:41.8924,lng:12.4853,year:-44,endYear:-44,
+   zh:'凱撒遇刺',en:'Assassination of Julius Caesar',
+   tags_zh:['羅馬','政治','歷史轉折'],tags_en:['Rome','Politics','Turning Point'],
+   wiki_zh:'尤利烏斯·凱撒遇刺案',wiki_en:'Assassination_of_Julius_Caesar'},
+  {id:'colosseum',type:'building',lat:41.8902,lng:12.4922,year:80,endYear:2100,
+   zh:'羅馬競技場',en:'Colosseum',
+   tags_zh:['羅馬帝國','建築','娛樂'],tags_en:['Roman Empire','Architecture','Entertainment'],
+   wiki_zh:'羅馬競技場',wiki_en:'Colosseum'},
+  {id:'cleopatra',type:'person',lat:31.1992,lng:29.9054,year:-69,endYear:-30,
+   zh:'克麗奧佩脫拉七世',en:'Cleopatra VII',
+   tags_zh:['埃及','法老','政治'],tags_en:['Egypt','Pharaoh','Politics'],
+   wiki_zh:'克麗奧佩脫拉七世',wiki_en:'Cleopatra'},
+
+  // ── 古代亞洲 ──
+  {id:'confucius',type:'person',lat:35.5979,lng:116.9916,year:-551,endYear:-479,
+   zh:'孔子',en:'Confucius',
+   tags_zh:['中國','哲學','儒家'],tags_en:['China','Philosophy','Confucianism'],
+   wiki_zh:'孔子',wiki_en:'Confucius'},
+  {id:'buddha',type:'person',lat:27.4833,lng:83.8167,year:-563,endYear:-483,
+   zh:'釋迦牟尼',en:'Gautama Buddha',
+   tags_zh:['印度','佛教','宗教'],tags_en:['India','Buddhism','Religion'],
+   wiki_zh:'喬達摩·悉達多',wiki_en:'Gautama_Buddha'},
+  {id:'ashoka',type:'person',lat:25.6102,lng:85.1441,year:-304,endYear:-232,
+   zh:'阿育王',en:'Ashoka',
+   tags_zh:['孔雀王朝','印度','佛教'],tags_en:['Maurya Empire','India','Buddhism'],
+   wiki_zh:'阿育王',wiki_en:'Ashoka'},
+  {id:'silk_road_start',type:'event',lat:34.3416,lng:108.9398,year:-130,endYear:1453,
+   zh:'絲路開通',en:'Silk Road Established',
+   tags_zh:['漢朝','貿易','文化交流'],tags_en:['Han Dynasty','Trade','Cultural Exchange'],
+   wiki_zh:'絲綢之路',wiki_en:'Silk_Road'},
+  {id:'han_dynasty',type:'regime',lat:34.3416,lng:108.9398,year:-206,endYear:220,
+   zh:'西漢政權中心（長安）',en:'Han Dynasty Capital (Chang\'an)',
+   tags_zh:['漢朝','中國','帝國'],tags_en:['Han Dynasty','China','Empire'],
+   wiki_zh:'漢朝',wiki_en:'Han_dynasty'},
+
+  // ── 中世紀 ──
+  {id:'muhammad',type:'person',lat:21.3891,lng:39.8579,year:570,endYear:632,
+   zh:'穆罕默德',en:'Muhammad',
+   tags_zh:['伊斯蘭','宗教','阿拉伯'],tags_en:['Islam','Religion','Arabia'],
+   wiki_zh:'穆罕默德',wiki_en:'Muhammad'},
+  {id:'islam_founding',type:'event',lat:21.4225,lng:39.8262,year:622,endYear:622,
+   zh:'伊斯蘭曆元年（希吉拉）',en:'Hijra — Islamic Calendar Year 1',
+   tags_zh:['伊斯蘭','宗教','阿拉伯'],tags_en:['Islam','Religion','Arabia'],
+   wiki_zh:'希吉拉',wiki_en:'Hijra'},
+  {id:'tang_dynasty',type:'regime',lat:34.3416,lng:108.9398,year:618,endYear:907,
+   zh:'唐朝政權中心（長安）',en:'Tang Dynasty Capital (Chang\'an)',
+   tags_zh:['唐朝','中國','盛唐'],tags_en:['Tang Dynasty','China','Golden Age'],
+   wiki_zh:'唐朝',wiki_en:'Tang_dynasty'},
+  {id:'charlemagne',type:'person',lat:50.7753,lng:6.0839,year:747,endYear:814,
+   zh:'查理曼大帝',en:'Charlemagne',
+   tags_zh:['法蘭克','中世紀','歐洲'],tags_en:['Frankish','Medieval','Europe'],
+   wiki_zh:'查理曼',wiki_en:'Charlemagne'},
+  {id:'battle_of_tours',type:'event',lat:47.3941,lng:0.6848,year:732,endYear:732,
+   zh:'圖爾戰役',en:'Battle of Tours',
+   tags_zh:['法蘭克','伊斯蘭','歐洲'],tags_en:['Frankish','Islam','Europe'],
+   wiki_zh:'圖爾戰役',wiki_en:'Battle_of_Tours'},
+  {id:'genghis_khan',type:'person',lat:47.9,lng:106.9,year:1162,endYear:1227,
+   zh:'成吉思汗',en:'Genghis Khan',
+   tags_zh:['蒙古','征服','帝國'],tags_en:['Mongolia','Conquest','Empire'],
+   wiki_zh:'成吉思汗',wiki_en:'Genghis_Khan'},
+  {id:'mongol_empire',type:'regime',lat:47.9,lng:106.9,year:1206,endYear:1368,
+   zh:'蒙古帝國中心（哈拉和林）',en:'Mongol Empire (Karakorum)',
+   tags_zh:['蒙古','帝國','征服'],tags_en:['Mongol','Empire','Conquest'],
+   wiki_zh:'蒙古帝國',wiki_en:'Mongol_Empire'},
+  {id:'marco_polo',type:'person',lat:45.4408,lng:12.3155,year:1254,endYear:1324,
+   zh:'馬可波羅',en:'Marco Polo',
+   tags_zh:['探險','威尼斯','絲路'],tags_en:['Explorer','Venice','Silk Road'],
+   wiki_zh:'馬可波羅',wiki_en:'Marco_Polo'},
+  {id:'black_death',type:'event',lat:43.7696,lng:11.2558,year:1347,endYear:1353,
+   zh:'黑死病爆發（歐洲）',en:'Black Death Pandemic',
+   tags_zh:['瘟疫','中世紀','歐洲'],tags_en:['Plague','Medieval','Europe'],
+   wiki_zh:'黑死病',wiki_en:'Black_Death'},
+  {id:'joan_of_arc',type:'person',lat:48.4,lng:5.73,year:1412,endYear:1431,
+   zh:'聖女貞德',en:'Joan of Arc',
+   tags_zh:['法國','中世紀','百年戰爭'],tags_en:['France','Medieval','Hundred Years War'],
+   wiki_zh:'聖女貞德',wiki_en:'Joan_of_Arc'},
+  {id:'gutenberg',type:'person',lat:49.9929,lng:8.2473,year:1400,endYear:1468,
+   zh:'古騰堡（活字印刷）',en:'Johannes Gutenberg',
+   tags_zh:['德意志','印刷術','文藝復興'],tags_en:['Germany','Printing','Renaissance'],
+   wiki_zh:'约翰内斯·古腾堡',wiki_en:'Johannes_Gutenberg'},
+  {id:'hagia_sophia',type:'building',lat:41.0086,lng:28.9802,year:537,endYear:2100,
+   zh:'聖索菲亞大教堂',en:'Hagia Sophia',
+   tags_zh:['拜占庭','建築','伊斯坦堡'],tags_en:['Byzantine','Architecture','Istanbul'],
+   wiki_zh:'聖索菲亞大教堂',wiki_en:'Hagia_Sophia'},
+  {id:'angkor_wat',type:'building',lat:13.4125,lng:103.8670,year:1113,endYear:2100,
+   zh:'吳哥窟',en:'Angkor Wat',
+   tags_zh:['高棉帝國','建築','柬埔寨'],tags_en:['Khmer Empire','Architecture','Cambodia'],
+   wiki_zh:'吳哥窟',wiki_en:'Angkor_Wat'},
+  {id:'notre_dame',type:'building',lat:48.8530,lng:2.3499,year:1163,endYear:2100,
+   zh:'巴黎聖母院',en:'Notre-Dame de Paris',
+   tags_zh:['法國','哥德式','建築'],tags_en:['France','Gothic','Architecture'],
+   wiki_zh:'巴黎聖母院',wiki_en:'Notre-Dame_de_Paris'},
+
+  // ── 文藝復興 & 大航海 ──
+  {id:'columbus',type:'person',lat:37.3861,lng:-5.9845,year:1451,endYear:1506,
+   zh:'哥倫布',en:'Christopher Columbus',
+   tags_zh:['探險','大航海','美洲'],tags_en:['Explorer','Age of Sail','Americas'],
+   wiki_zh:'克里斯托弗·哥倫布',wiki_en:'Christopher_Columbus'},
+  {id:'columbus_landing',type:'event',lat:24.0,lng:-74.5,year:1492,endYear:1492,
+   zh:'哥倫布抵達美洲',en:'Columbus Reaches the Americas',
+   tags_zh:['大航海','美洲','歐洲'],tags_en:['Age of Discovery','Americas','Europe'],
+   wiki_zh:'哥倫布的美洲之行',wiki_en:'Voyages_of_Christopher_Columbus'},
+  {id:'da_vinci',type:'person',lat:43.7832,lng:11.2506,year:1452,endYear:1519,
+   zh:'達文西',en:'Leonardo da Vinci',
+   tags_zh:['義大利','文藝復興','藝術家'],tags_en:['Italy','Renaissance','Artist'],
+   wiki_zh:'列奧納多·達文西',wiki_en:'Leonardo_da_Vinci'},
+  {id:'michelangelo',type:'person',lat:43.7832,lng:11.2506,year:1475,endYear:1564,
+   zh:'米開朗基羅',en:'Michelangelo',
+   tags_zh:['義大利','文藝復興','雕塑'],tags_en:['Italy','Renaissance','Sculpture'],
+   wiki_zh:'米開朗基羅',wiki_en:'Michelangelo'},
+  {id:'magellan',type:'person',lat:38.7223,lng:-9.1393,year:1480,endYear:1521,
+   zh:'麥哲倫',en:'Ferdinand Magellan',
+   tags_zh:['探險','環球航行','葡萄牙'],tags_en:['Explorer','Circumnavigation','Portugal'],
+   wiki_zh:'費爾南多·麥哲倫',wiki_en:'Ferdinand_Magellan'},
+  {id:'martin_luther',type:'person',lat:51.8,lng:12.0,year:1483,endYear:1546,
+   zh:'馬丁路德',en:'Martin Luther',
+   tags_zh:['宗教改革','德意志','基督教'],tags_en:['Reformation','Germany','Christianity'],
+   wiki_zh:'馬丁·路德',wiki_en:'Martin_Luther'},
+  {id:'reformation',type:'event',lat:51.8,lng:12.0,year:1517,endYear:1517,
+   zh:'宗教改革（九十五條論綱）',en:'Protestant Reformation',
+   tags_zh:['宗教改革','基督教','歐洲'],tags_en:['Reformation','Christianity','Europe'],
+   wiki_zh:'新教改革',wiki_en:'Protestant_Reformation'},
+  {id:'copernicus',type:'person',lat:53.0138,lng:18.6,year:1473,endYear:1543,
+   zh:'哥白尼',en:'Nicolaus Copernicus',
+   tags_zh:['波蘭','天文學','科學革命'],tags_en:['Poland','Astronomy','Scientific Revolution'],
+   wiki_zh:'尼古拉·哥白尼',wiki_en:'Nicolaus_Copernicus'},
+
+  // ── 近代 ──
+  {id:'taj_mahal',type:'building',lat:27.1751,lng:78.0421,year:1653,endYear:2100,
+   zh:'泰姬瑪哈陵',en:'Taj Mahal',
+   tags_zh:['莫臥兒帝國','印度','建築'],tags_en:['Mughal Empire','India','Architecture'],
+   wiki_zh:'泰姬陵',wiki_en:'Taj_Mahal'},
+  {id:'newton',type:'person',lat:52.6694,lng:-0.4014,year:1643,endYear:1727,
+   zh:'牛頓',en:'Isaac Newton',
+   tags_zh:['英國','物理學','科學革命'],tags_en:['England','Physics','Scientific Revolution'],
+   wiki_zh:'艾薩克·牛頓',wiki_en:'Isaac_Newton'},
+  {id:'glorious_revolution',type:'event',lat:51.5074,lng:-0.1278,year:1688,endYear:1688,
+   zh:'光榮革命',en:'Glorious Revolution',
+   tags_zh:['英國','民主','憲政'],tags_en:['England','Democracy','Constitution'],
+   wiki_zh:'光榮革命',wiki_en:'Glorious_Revolution'},
+  {id:'american_independence',type:'event',lat:39.9526,lng:-75.1652,year:1776,endYear:1776,
+   zh:'美國獨立宣言',en:'American Declaration of Independence',
+   tags_zh:['美國','革命','民主'],tags_en:['USA','Revolution','Democracy'],
+   wiki_zh:'美國獨立宣言',wiki_en:'United_States_Declaration_of_Independence'},
+  {id:'french_revolution',type:'event',lat:48.8566,lng:2.3522,year:1789,endYear:1799,
+   zh:'法國大革命',en:'French Revolution',
+   tags_zh:['法國','革命','民主'],tags_en:['France','Revolution','Democracy'],
+   wiki_zh:'法國大革命',wiki_en:'French_Revolution'},
+  {id:'napoleon',type:'person',lat:41.9225,lng:8.7380,year:1769,endYear:1821,
+   zh:'拿破崙',en:'Napoleon Bonaparte',
+   tags_zh:['法國','帝國','征服'],tags_en:['France','Empire','Conquest'],
+   wiki_zh:'拿破崙一世',wiki_en:'Napoleon'},
+  {id:'waterloo',type:'event',lat:50.6799,lng:4.4117,year:1815,endYear:1815,
+   zh:'滑鐵盧戰役',en:'Battle of Waterloo',
+   tags_zh:['拿破崙','歐洲','戰爭'],tags_en:['Napoleon','Europe','War'],
+   wiki_zh:'滑鐵盧戰役',wiki_en:'Battle_of_Waterloo'},
+  {id:'industrial_revolution',type:'event',lat:52.4862,lng:-1.8904,year:1760,endYear:1840,
+   zh:'工業革命（英國）',en:'Industrial Revolution',
+   tags_zh:['英國','科技','社會變遷'],tags_en:['England','Technology','Social Change'],
+   wiki_zh:'工業革命',wiki_en:'Industrial_Revolution'},
+  {id:'darwin',type:'person',lat:51.4769,lng:-0.0005,year:1809,endYear:1882,
+   zh:'達爾文',en:'Charles Darwin',
+   tags_zh:['英國','生物學','演化論'],tags_en:['England','Biology','Evolution'],
+   wiki_zh:'查爾斯·達爾文',wiki_en:'Charles_Darwin'},
+  {id:'marx',type:'person',lat:49.756,lng:6.6414,year:1818,endYear:1883,
+   zh:'卡爾·馬克思',en:'Karl Marx',
+   tags_zh:['德意志','哲學','共產主義'],tags_en:['Germany','Philosophy','Communism'],
+   wiki_zh:'卡爾·馬克思',wiki_en:'Karl_Marx'},
+  {id:'meiji_restoration',type:'event',lat:35.6762,lng:139.6503,year:1868,endYear:1868,
+   zh:'明治維新',en:'Meiji Restoration',
+   tags_zh:['日本','現代化','明治'],tags_en:['Japan','Modernization','Meiji'],
+   wiki_zh:'明治維新',wiki_en:'Meiji_Restoration'},
+  {id:'eiffel_tower',type:'building',lat:48.8584,lng:2.2945,year:1889,endYear:2100,
+   zh:'艾菲爾鐵塔',en:'Eiffel Tower',
+   tags_zh:['法國','建築','巴黎'],tags_en:['France','Architecture','Paris'],
+   wiki_zh:'艾菲爾鐵塔',wiki_en:'Eiffel_Tower'},
+
+  // ── 二十世紀 ──
+  {id:'wwi',type:'event',lat:50.9013,lng:4.3340,year:1914,endYear:1918,
+   zh:'第一次世界大戰',en:'World War I',
+   tags_zh:['戰爭','歐洲','現代史'],tags_en:['War','Europe','Modern History'],
+   wiki_zh:'第一次世界大戰',wiki_en:'World_War_I'},
+  {id:'russian_revolution',type:'event',lat:59.9343,lng:30.3351,year:1917,endYear:1917,
+   zh:'俄國十月革命',en:'Russian October Revolution',
+   tags_zh:['俄國','革命','共產主義'],tags_en:['Russia','Revolution','Communism'],
+   wiki_zh:'十月革命',wiki_en:'October_Revolution'},
+  {id:'wwii_start',type:'event',lat:52.2297,lng:21.0122,year:1939,endYear:1945,
+   zh:'第二次世界大戰',en:'World War II',
+   tags_zh:['戰爭','納粹','反法西斯'],tags_en:['War','Nazi','Anti-Fascism'],
+   wiki_zh:'第二次世界大戰',wiki_en:'World_War_II'},
+  {id:'hiroshima',type:'event',lat:34.3853,lng:132.4553,year:1945,endYear:1945,
+   zh:'廣島原子彈爆炸',en:'Atomic Bombing of Hiroshima',
+   tags_zh:['二戰','核武','日本'],tags_en:['WWII','Nuclear','Japan'],
+   wiki_zh:'廣島市原子彈爆炸',wiki_en:'Atomic_bombings_of_Hiroshima_and_Nagasaki'},
+  {id:'un_founding',type:'event',lat:37.7749,lng:-122.4194,year:1945,endYear:1945,
+   zh:'聯合國成立',en:'United Nations Founded',
+   tags_zh:['國際關係','和平','現代史'],tags_en:['International','Peace','Modern History'],
+   wiki_zh:'聯合國',wiki_en:'United_Nations'},
+  {id:'mao_prc',type:'event',lat:39.9042,lng:116.4074,year:1949,endYear:1949,
+   zh:'中華人民共和國成立',en:'People\'s Republic of China Founded',
+   tags_zh:['中國','共產主義','現代史'],tags_en:['China','Communism','Modern History'],
+   wiki_zh:'中華人民共和國',wiki_en:'People%27s_Republic_of_China'},
+  {id:'moon_landing',type:'event',lat:28.5721,lng:-80.6480,year:1969,endYear:1969,
+   zh:'人類首次登月（阿波羅11號）',en:'First Moon Landing — Apollo 11',
+   tags_zh:['太空','美國','科技'],tags_en:['Space','USA','Technology'],
+   wiki_zh:'阿波羅11號',wiki_en:'Apollo_11'},
+  {id:'berlin_wall_fall',type:'event',lat:52.5163,lng:13.3777,year:1989,endYear:1989,
+   zh:'柏林圍牆倒塌',en:'Fall of the Berlin Wall',
+   tags_zh:['冷戰','德國','民主'],tags_en:['Cold War','Germany','Democracy'],
+   wiki_zh:'柏林圍牆',wiki_en:'Berlin_Wall'},
+
+  // ── 中國專區補充 ──
+  {id:'sui_canal',type:'building',lat:32.0617,lng:118.7778,year:605,endYear:2100,
+   zh:'大運河開鑿（隋朝）',en:'Grand Canal of China (Sui Dynasty)',
+   tags_zh:['隋朝','建築','水利'],tags_en:['Sui Dynasty','Infrastructure','Water'],
+   wiki_zh:'京杭大運河',wiki_en:'Grand_Canal_(China)'},
+  {id:'song_dynasty',type:'regime',lat:34.7472,lng:113.6249,year:960,endYear:1279,
+   zh:'北宋政權中心（開封）',en:'Northern Song Dynasty (Kaifeng)',
+   tags_zh:['宋朝','中國','科技'],tags_en:['Song Dynasty','China','Technology'],
+   wiki_zh:'宋朝',wiki_en:'Song_dynasty'},
+  {id:'zheng_he',type:'person',lat:25.0,lng:102.7,year:1371,endYear:1433,
+   zh:'鄭和',en:'Zheng He',
+   tags_zh:['明朝','航海','探險'],tags_en:['Ming Dynasty','Navigation','Explorer'],
+   wiki_zh:'鄭和',wiki_en:'Zheng_He'},
+  {id:'forbidden_city',type:'building',lat:39.9163,lng:116.3972,year:1420,endYear:2100,
+   zh:'北京故宮（紫禁城）',en:'Forbidden City, Beijing',
+   tags_zh:['明朝','建築','北京'],tags_en:['Ming Dynasty','Architecture','Beijing'],
+   wiki_zh:'故宮',wiki_en:'Forbidden_City'},
+
+  // ── 伊斯蘭黃金時代 ──
+  {id:'ibn_battuta',type:'person',lat:35.1688,lng:-5.2688,year:1304,endYear:1368,
+   zh:'伊本·白圖泰',en:'Ibn Battuta',
+   tags_zh:['摩洛哥','探險','旅行家'],tags_en:['Morocco','Explorer','Traveler'],
+   wiki_zh:'伊本·白圖泰',wiki_en:'Ibn_Battuta'},
+  {id:'avicenna',type:'person',lat:39.9,lng:66.0,year:980,endYear:1037,
+   zh:'伊本·西那（阿維森納）',en:'Ibn Sina (Avicenna)',
+   tags_zh:['波斯','醫學','哲學'],tags_en:['Persia','Medicine','Philosophy'],
+   wiki_zh:'伊本·西那',wiki_en:'Avicenna'},
+  {id:'alhambra',type:'building',lat:37.1767,lng:-3.5888,year:1238,endYear:2100,
+   zh:'阿爾罕布拉宮',en:'Alhambra Palace',
+   tags_zh:['伊斯蘭','西班牙','建築'],tags_en:['Islamic','Spain','Architecture'],
+   wiki_zh:'阿爾罕布拉宮',wiki_en:'Alhambra'},
+
+  // ── 美洲文明 ──
+  {id:'chichen_itza',type:'building',lat:20.6843,lng:-88.5678,year:600,endYear:2100,
+   zh:'奇琴伊察（馬雅）',en:'Chichen Itza (Maya)',
+   tags_zh:['馬雅','墨西哥','建築'],tags_en:['Maya','Mexico','Architecture'],
+   wiki_zh:'奇琴伊察',wiki_en:'Chichen_Itza'},
+  {id:'machu_picchu',type:'building',lat:-13.1631,lng:-72.545,year:1450,endYear:2100,
+   zh:'馬丘比丘（印加）',en:'Machu Picchu (Inca)',
+   tags_zh:['印加','秘魯','建築'],tags_en:['Inca','Peru','Architecture'],
+   wiki_zh:'馬丘比丘',wiki_en:'Machu_Picchu'},
+  {id:'aztec_tenochtitlan',type:'regime',lat:19.4326,lng:-99.1332,year:1325,endYear:1521,
+   zh:'阿茲提克帝國首都（特諾奇提特蘭）',en:'Aztec Empire Capital (Tenochtitlan)',
+   tags_zh:['阿茲提克','墨西哥','美洲'],tags_en:['Aztec','Mexico','Americas'],
+   wiki_zh:'特諾奇提特蘭',wiki_en:'Tenochtitlan'},
+];
+
+// ═══════════════════════════════════════════════════════
+//  政權疆域資料（簡化版 GeoJSON，代表性政權）
+// ═══════════════════════════════════════════════════════
+const REGIME_GEOJSON = {
+  // 格式：{ yearStart, yearEnd, name_zh, name_en, color, coordinates(簡化多邊形) }
+  regimes:[
+    {yearStart:-221,yearEnd:206,name_zh:'秦朝',name_en:'Qin Dynasty',color:'#8b2222',
+     coords:[[35,105],[42,120],[35,122],[28,120],[25,107],[30,100],[35,105]]},
+    {yearStart:-206,yearEnd:220,name_zh:'漢朝',name_en:'Han Dynasty',color:'#b8860b',
+     coords:[[40,75],[48,125],[40,130],[28,122],[22,110],[20,100],[25,85],[35,75],[40,75]]},
+    {yearStart:27,yearEnd:476,name_zh:'羅馬帝國',name_en:'Roman Empire',color:'#8b3a2a',
+     coords:[[55,5],[50,40],[42,45],[35,42],[30,35],[28,10],[32,-5],[40,-6],[44,0],[50,-4],[55,5]]},
+    {yearStart:618,yearEnd:907,name_zh:'唐朝',name_en:'Tang Dynasty',color:'#c4a000',
+     coords:[[42,73],[52,120],[45,130],[35,122],[28,118],[20,108],[22,95],[28,80],[38,73],[42,73]]},
+    {yearStart:960,yearEnd:1127,name_zh:'北宋',name_en:'Northern Song',color:'#4a7a8a',
+     coords:[[40,105],[42,120],[35,122],[28,120],[25,107],[32,100],[38,100],[40,105]]},
+    {yearStart:1206,yearEnd:1368,name_zh:'蒙古帝國',name_en:'Mongol Empire',color:'#6b4c11',
+     coords:[[55,30],[65,130],[55,140],[45,135],[35,130],[25,118],[22,80],[28,65],[38,50],[50,35],[55,30]]},
+    {yearStart:1368,yearEnd:1644,name_zh:'明朝',name_en:'Ming Dynasty',color:'#8b1a1a',
+     coords:[[42,80],[48,125],[40,130],[28,122],[22,110],[20,100],[25,85],[35,80],[42,80]]},
+    {yearStart:800,yearEnd:1200,name_zh:'阿拔斯哈里發國',name_en:'Abbasid Caliphate',color:'#2d5a27',
+     coords:[[42,25],[38,65],[22,65],[15,45],[12,35],[20,22],[35,22],[42,25]]},
+    {yearStart:1299,yearEnd:1923,name_zh:'鄂圖曼帝國',name_en:'Ottoman Empire',color:'#722f37',
+     coords:[[48,20],[42,45],[35,45],[28,38],[25,28],[30,22],[40,20],[48,20]]},
+    {yearStart:1556,yearEnd:1857,name_zh:'莫臥兒帝國',name_en:'Mughal Empire',color:'#556b2f',
+     coords:[[36,65],[36,78],[28,82],[22,80],[15,78],[18,68],[22,60],[30,60],[36,65]]},
+  ]
+};
+
+// Wikidata 查詢快取
+const wdCache = {};
+
+// ═══════════════════════════════════════════════════════
+//  初始化地圖
+// ═══════════════════════════════════════════════════════
+function initMap(){
+  map = L.map('map',{
+    center:[30,30],zoom:3,
+    minZoom:2,maxZoom:10,
+    zoomControl:true,
+  });
+
+  // 古地圖風格底圖
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; OpenStreetMap &copy; CartoDB',
+    subdomains:'abcd',maxZoom:19
+  }).addTo(map);
+
+  // 渲染初始狀態
+  renderYear(currentYear);
+
+  // 隱藏載入畫面
+  setTimeout(()=>{
+    const ov = document.getElementById('loading-overlay');
+    ov.style.opacity='0';
+    setTimeout(()=>ov.style.display='none',500);
+  },1200);
+}
+
+// ═══════════════════════════════════════════════════════
+//  自訂 Marker 圖示
+// ═══════════════════════════════════════════════════════
+const TYPE_ICONS = {
+  event:   {emoji:'⚔',color:'#7a2a1a'},
+  person:  {emoji:'◉',color:'#1a4a6a'},
+  artifact:{emoji:'⬡',color:'#3a5a2a'},
+  building:{emoji:'▲',color:'#4a3a6a'},
+  regime:  {emoji:'✦',color:'#6a4a1a'},
+};
+
+function makeIcon(type){
+  const cfg = TYPE_ICONS[type]||TYPE_ICONS.event;
+  return L.divIcon({
+    className:'',
+    html:`<div class="hm-marker ${type}" title="${type}">${cfg.emoji}</div>`,
+    iconSize:[28,28],iconAnchor:[14,14],popupAnchor:[0,-16]
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  渲染指定年份
+// ═══════════════════════════════════════════════════════
+function renderYear(year){
+  currentYear = year;
+  updateYearDisplay(year);
+  clearMarkers();
+  clearRegimes();
+  renderRegimes(year);
+  renderMarkers(year);
+}
+
+function clearMarkers(){
+  allMarkers.forEach(m=>map.removeLayer(m));
+  allMarkers=[];
+}
+function clearRegimes(){
+  regimeLayers.forEach(l=>map.removeLayer(l));
+  regimeLayers=[];
+}
+
+function renderMarkers(year){
+  HISTORY_DATA.forEach(d=>{
+    if(!activeFilters.has(d.type)) return;
+    const sy = d.year;
+    const ey = d.endYear||d.year;
+    // 顯示條件：年份在範圍內，±100年容忍
+    if(year < sy-50 || year > ey+50) return;
+    const marker = L.marker([d.lat,d.lng],{icon:makeIcon(d.type)})
+      .addTo(map)
+      .on('click',()=>openEntry(d));
+    allMarkers.push(marker);
+  });
+
+  // Wikidata 補充（非同步）
+  fetchWikidataMarkers(year);
+}
+
+function renderRegimes(year){
+  REGIME_GEOJSON.regimes.forEach(r=>{
+    if(year < r.yearStart || year > r.yearEnd) return;
+    if(!activeFilters.has('regime')) return;
+    const poly = L.polygon(r.coords.map(c=>[c[0],c[1]]),{
+      color:r.color,weight:1.5,opacity:.7,
+      fillColor:r.color,fillOpacity:.15,
+      dashArray:'4,4'
+    }).addTo(map);
+    poly.bindTooltip(currentLang==='zh'?r.name_zh:r.name_en,{
+      permanent:false,direction:'center',
+      className:'regime-tooltip'
+    });
+    poly.on('click',()=>openRegimeEntry(r));
+    regimeLayers.push(poly);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  Wikidata 補充查詢
+// ═══════════════════════════════════════════════════════
+async function fetchWikidataMarkers(year){
+  const cacheKey = Math.round(year/50)*50;
+  if(wdCache[cacheKey]) return; // 已查過
+  wdCache[cacheKey] = true;
+
+  const yearStart = year - 25;
+  const yearEnd = year + 25;
+  const sparql = `
+SELECT DISTINCT ?item ?itemLabel ?lat ?lon ?typeLabel WHERE {
+  ?item wdt:P585 ?date .
+  FILTER(YEAR(?date) >= ${yearStart} && YEAR(?date) <= ${yearEnd})
+  ?item wdt:P625 ?coord .
+  BIND(geof:latitude(?coord) AS ?lat)
+  BIND(geof:longitude(?coord) AS ?lon)
+  OPTIONAL { ?item wdt:P31 ?type }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "${currentLang==='zh'?'zh,en':'en'}". }
+} LIMIT 30`;
+
+  const url = 'https://query.wikidata.org/sparql?format=json&query='+encodeURIComponent(sparql);
+  try{
+    const res = await fetch(url,{headers:{Accept:'application/sparql-results+json'}});
+    if(!res.ok) return;
+    const data = await res.json();
+    data.results.bindings.forEach(b=>{
+      const lat = parseFloat(b.lat?.value);
+      const lon = parseFloat(b.lon?.value);
+      if(!lat||!lon||isNaN(lat)||isNaN(lon)) return;
+      // 避免跟內建資料重疊（距離>0.5度）
+      const dup = HISTORY_DATA.some(d=>Math.abs(d.lat-lat)<0.5&&Math.abs(d.lng-lon)<0.5);
+      if(dup) return;
+      const label = b.itemLabel?.value||'';
+      if(!label || label.startsWith('Q')) return;
+      const wdItem = {
+        id:'wd_'+b.item.value.split('/').pop(),
+        type:'event',lat,lng:lon,
+        year,endYear:year,
+        zh:label,en:label,
+        tags_zh:['Wikidata'],tags_en:['Wikidata'],
+        wiki_en:null,wd_id:b.item.value.split('/').pop()
+      };
+      const m = L.marker([lat,lon],{icon:makeIcon('event'),opacity:.7})
+        .addTo(map)
+        .on('click',()=>openEntry(wdItem));
+      allMarkers.push(m);
+    });
+  }catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════
+//  側欄：開啟條目
+// ═══════════════════════════════════════════════════════
+function openEntry(d){
+  document.getElementById('welcome').style.display='none';
+  const card = document.getElementById('entry-card');
+  card.style.display='block';
+
+  const isZh = currentLang==='zh';
+  const typeLabelMap={event:{zh:'歷史事件',en:'Historical Event'},person:{zh:'人物',en:'Person'},artifact:{zh:'文物',en:'Artifact'},building:{zh:'建築',en:'Building'},regime:{zh:'政權',en:'Regime'}};
+  const tl = typeLabelMap[d.type]||{zh:'條目',en:'Entry'};
+
+  document.getElementById('entry-type-badge').textContent = isZh?tl.zh:tl.en;
+  document.getElementById('entry-name').textContent = isZh?d.zh:d.en;
+  document.getElementById('entry-name-en').textContent = isZh?d.en:d.zh;
+
+  // 年份顯示
+  const yStr = d.year<0?`西元前 ${Math.abs(d.year)} 年`:`西元 ${d.year} 年`;
+  const yStrEn = d.year<0?`${Math.abs(d.year)} BCE`:`${d.year} CE`;
+  const eyStr = d.endYear&&d.endYear!==d.year?(d.year<0?` — 西元前 ${Math.abs(d.endYear)} 年`:` — ${d.endYear} 年`):'';
+  document.getElementById('entry-year').textContent = isZh?(yStr+eyStr):(yStrEn+(d.endYear&&d.endYear!==d.year?` — ${d.endYear} CE`:''));
+
+  // 標籤
+  const tags = isZh?(d.tags_zh||[]):(d.tags_en||[]);
+  document.getElementById('entry-tags').innerHTML = tags.map(t=>`<span class="tag">${t}</span>`).join('');
+
+  // 圖片先隱藏
+  document.getElementById('entry-img-wrap').style.display='none';
+
+  // 摘述先顯示載入中
+  const ex = document.getElementById('entry-extract');
+  ex.className='entry-extract loading';
+  ex.textContent = isZh?'資料載入中…':'Loading...';
+
+  // 連結
+  const linksEl = document.getElementById('entry-links');
+  linksEl.innerHTML='';
+  if(d.wiki_zh||d.wiki_en){
+    const wikiUrl = isZh&&d.wiki_zh
+      ?`https://zh.wikipedia.org/wiki/${encodeURIComponent(d.wiki_zh)}`
+      :`https://en.wikipedia.org/wiki/${encodeURIComponent(d.wiki_en||d.wiki_zh)}`;
+    linksEl.innerHTML=`<a class="entry-link" href="${wikiUrl}" target="_blank">◈ Wikipedia</a>`;
+  }
+
+  // 非同步抓 Wikipedia
+  fetchWikiSummary(d);
+}
+
+function openRegimeEntry(r){
+  const fakeEntry = {
+    id:'regime_'+r.name_en.replace(/ /g,'_'),
+    type:'regime',lat:r.coords[0][0],lng:r.coords[0][1],
+    year:r.yearStart,endYear:r.yearEnd,
+    zh:r.name_zh,en:r.name_en,
+    tags_zh:['政權','帝國'],tags_en:['Regime','Empire'],
+    wiki_zh:r.name_zh,wiki_en:r.name_en.replace(/ /g,'_')
+  };
+  openEntry(fakeEntry);
+}
+
+// ═══════════════════════════════════════════════════════
+//  Wikipedia API 抓取
+// ═══════════════════════════════════════════════════════
+const wikiCache={};
+async function fetchWikiSummary(d){
+  const isZh = currentLang==='zh';
+  const lang = isZh?'zh':'en';
+  const title = isZh?(d.wiki_zh||d.wiki_en||d.zh):(d.wiki_en||d.wiki_zh||d.en);
+  if(!title){
+    setExtract(isZh?'暫無詳細資料。':'No detailed information available.');
+    return;
+  }
+  const cacheKey = lang+'_'+title;
+  if(wikiCache[cacheKey]){
+    applyWikiData(wikiCache[cacheKey]);
+    return;
+  }
+  const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('not found');
+    const data = await res.json();
+    wikiCache[cacheKey]=data;
+    applyWikiData(data);
+  }catch(e){
+    // fallback: 嘗試英文
+    if(isZh&&d.wiki_en){
+      try{
+        const res2 = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(d.wiki_en)}`);
+        if(res2.ok){const data2=await res2.json();wikiCache[cacheKey]=data2;applyWikiData(data2);return;}
+      }catch(e2){}
+    }
+    setExtract(isZh?'目前無法載入資料，請稍後再試。':'Could not load data. Please try again.');
+  }
+}
+
+function applyWikiData(data){
+  const ex = document.getElementById('entry-extract');
+  ex.className='entry-extract';
+  ex.textContent = data.extract||'No summary available.';
+
+  // 圖片
+  if(data.thumbnail&&data.thumbnail.source){
+    const imgWrap = document.getElementById('entry-img-wrap');
+    const img = document.getElementById('entry-img');
+    img.src = data.thumbnail.source;
+    img.onerror=()=>imgWrap.style.display='none';
+    imgWrap.style.display='block';
+  }
+
+  // 補充維基連結
+  if(data.content_urls){
+    const linksEl = document.getElementById('entry-links');
+    if(!linksEl.querySelector('a')){
+      const url = data.content_urls.desktop?.page||'';
+      if(url) linksEl.innerHTML=`<a class="entry-link" href="${url}" target="_blank">◈ Wikipedia</a>`;
+    }
+  }
+}
+
+function setExtract(txt){
+  const ex=document.getElementById('entry-extract');
+  ex.className='entry-extract';
+  ex.textContent=txt;
+}
+
+// ═══════════════════════════════════════════════════════
+//  時間軸控制
+// ═══════════════════════════════════════════════════════
+const slider = ()=>document.getElementById('year-slider');
+
+function updateYearDisplay(year){
+  const el = document.getElementById('year-display');
+  const era = document.getElementById('year-era');
+  if(year<0){
+    el.textContent = Math.abs(year);
+    era.textContent = currentLang==='zh'?'西元前':'BCE';
+  } else {
+    el.textContent = year===0?1:year;
+    era.textContent = currentLang==='zh'?'西元':'CE';
+  }
+}
+
+document.getElementById('year-slider').addEventListener('input',function(){
+  const y = parseInt(this.value);
+  renderYear(y);
+});
+
+let playSpeed = 20; // 每步年數
+function togglePlay(){
+  playing=!playing;
+  document.getElementById('play-btn').textContent=playing?'⏸':'▶';
+  if(playing) stepPlay();
+}
+function stepPlay(){
+  if(!playing) return;
+  let y = parseInt(slider().value)+playSpeed;
+  if(y>2000){y=-3000;}
+  slider().value=y;
+  renderYear(y);
+  playTimer=setTimeout(stepPlay,400);
+}
+
+// ═══════════════════════════════════════════════════════
+//  語言切換
+// ═══════════════════════════════════════════════════════
+function toggleLang(){
+  currentLang = currentLang==='zh'?'en':'zh';
+  document.getElementById('lang-btn').textContent = currentLang==='zh'?'EN':'中';
+  document.documentElement.lang = currentLang==='zh'?'zh-TW':'en';
+
+  // 更新所有 data-zh/data-en 元素
+  document.querySelectorAll('[data-zh]').forEach(el=>{
+    el.textContent = currentLang==='zh'?el.dataset.zh:el.dataset.en;
+  });
+
+  // 重新渲染（更新 tooltip 語言）
+  clearRegimes();
+  renderRegimes(currentYear);
+  updateYearDisplay(currentYear);
+
+  // 若側欄有開啟的條目，重新清空（讓使用者重新點選）
+  wikiCache; // 快取保留，語言切換後重抓
+}
+
+// ═══════════════════════════════════════════════════════
+//  篩選器
+// ═══════════════════════════════════════════════════════
+function toggleFilter(btn,type){
+  if(activeFilters.has(type)){
+    activeFilters.delete(type);
+    btn.classList.remove('active');
+  } else {
+    activeFilters.add(type);
+    btn.classList.add('active');
+  }
+  clearMarkers();
+  clearRegimes();
+  renderRegimes(currentYear);
+  renderMarkers(currentYear);
+}
+
+// ═══════════════════════════════════════════════════════
+//  啟動
+// ═══════════════════════════════════════════════════════
+window.addEventListener('load',initMap);
+</script>
+</body>
+</html>
