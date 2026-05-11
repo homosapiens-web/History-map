@@ -126,7 +126,7 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:'Noto S
   color:#5a4a30;font-style:italic;letter-spacing:.5px;
 }
 
-#entry-links{display:flex;gap:10px;flex-wrap:wrap}
+#entry-links{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
 .entry-link{
   font-size:11px;padding:6px 14px;border-radius:3px;
   border:1px solid #4a3e2a;color:var(--gold-light);
@@ -135,6 +135,50 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:'Noto S
   letter-spacing:1px;font-family:'Cinzel',serif;
 }
 .entry-link:hover{background:#3a3020;border-color:var(--gold)}
+
+/* 前因後果區塊 */
+.relations-section{margin-bottom:20px}
+.relations-title{
+  font-size:10px;letter-spacing:2px;color:#6a5a40;
+  font-family:'Cinzel',serif;margin-bottom:8px;
+  padding-bottom:5px;border-bottom:1px solid #2f2920;
+}
+.relation-item{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:7px 0;border-bottom:1px solid #2a2015;cursor:pointer;
+  transition:background .15s;
+}
+.relation-item:last-child{border-bottom:none}
+.relation-item:hover .relation-name{color:var(--gold)}
+.relation-arrow{
+  font-size:10px;color:#4a3e2a;flex-shrink:0;
+  margin-top:2px;font-family:'Cinzel',serif;
+}
+.relation-name{font-size:12px;color:#c0a880;line-height:1.4;transition:color .15s}
+.relation-role{font-size:10px;color:#6a5a40;margin-top:2px;letter-spacing:.5px}
+
+/* 相關條目 chips */
+.related-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px}
+.related-chip{
+  font-size:10px;padding:4px 10px;border-radius:2px;
+  background:#2f2920;border:1px solid #3a3020;
+  color:#9a8a6a;letter-spacing:.5px;cursor:pointer;
+  transition:all .15s;display:flex;align-items:center;gap:4px;
+}
+.related-chip:hover{background:#3a3020;border-color:var(--gold);color:var(--gold)}
+.related-chip-type{font-size:9px;opacity:.7}
+
+/* 麵包屑導航 */
+#panel-nav{
+  display:flex;align-items:center;gap:6px;padding:8px 20px;
+  border-bottom:1px solid #2a2015;flex-shrink:0;min-height:34px;
+}
+#panel-nav-back{
+  background:transparent;border:none;color:#6a5a40;
+  font-size:16px;cursor:pointer;padding:0 4px;transition:color .15s;line-height:1;
+}
+#panel-nav-back:hover{color:var(--gold)}
+#panel-nav-crumbs{font-size:10px;color:#5a4a30;letter-spacing:.5px;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 
 /* ── 時間軸 ── */
 #timeline-bar{
@@ -304,6 +348,10 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:'Noto S
     <div id="panel-title" data-zh="歷史條目" data-en="Historical Entry">歷史條目</div>
     <div id="panel-subtitle" data-zh="點擊地圖上的標記查看詳情" data-en="Click a marker to view details">點擊地圖上的標記查看詳情</div>
   </div>
+  <div id="panel-nav" style="display:none">
+    <button id="panel-nav-back" onclick="navBack()" title="上一頁">←</button>
+    <div id="panel-nav-crumbs"></div>
+  </div>
   <div id="panel-content">
     <div id="welcome">
       <div class="compass">🧭</div>
@@ -313,7 +361,7 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:'Noto S
         <span data-zh="使用篩選器控制顯示類型" data-en="Use filters to control marker types">使用篩選器控制顯示類型</span>
       </p>
     </div>
-    <div id="entry-card">
+    <div id="entry-card" style="display:none;padding:20px">
       <div id="entry-type-badge"></div>
       <div id="entry-name"></div>
       <div id="entry-name-en"></div>
@@ -322,6 +370,18 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:'Noto S
       <div id="entry-tags"></div>
       <div id="entry-extract"></div>
       <div id="entry-links"></div>
+      <div id="entry-causes" class="relations-section" style="display:none">
+        <div class="relations-title" data-zh="▸ 前因" data-en="▸ CAUSES">▸ 前因</div>
+        <div id="entry-causes-list"></div>
+      </div>
+      <div id="entry-effects" class="relations-section" style="display:none">
+        <div class="relations-title" data-zh="▸ 影響與後續" data-en="▸ CONSEQUENCES">▸ 影響與後續</div>
+        <div id="entry-effects-list"></div>
+      </div>
+      <div id="entry-related" style="display:none">
+        <div class="relations-title" data-zh="▸ 相關條目" data-en="▸ RELATED">▸ 相關條目</div>
+        <div id="entry-related-chips" class="related-chips"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -702,6 +762,9 @@ const REGIME_GEOJSON = {
 
 // Wikidata 查詢快取
 const wdCache = {};
+// 側欄導航歷史
+const navHistory = [];
+let currentEntry = null;
 
 // ═══════════════════════════════════════════════════════
 //  初始化地圖
@@ -807,49 +870,75 @@ function renderRegimes(year){
 }
 
 // ═══════════════════════════════════════════════════════
-//  Wikidata 補充查詢
+//  Wikidata 補充查詢（修正版）
 // ═══════════════════════════════════════════════════════
+// 要排除的無聊事件類型 QID
+const WD_EXCLUDE_TYPES = new Set([
+  'Q3186692', // 日蝕
+  'Q4061301', // 月蝕
+  'Q18890656',// 天文現象
+  'Q1457376', // 彗星接近
+  'Q179057',  // 爆炸（太模糊）
+  'Q11691',   // 颱風（自然災害可保留，但單獨處理）
+]);
+
 async function fetchWikidataMarkers(year){
   const cacheKey = Math.round(year/50)*50;
-  if(wdCache[cacheKey]) return; // 已查過
-  wdCache[cacheKey] = true;
+  if(wdCache['markers_'+cacheKey]) return;
+  wdCache['markers_'+cacheKey] = true;
 
-  const yearStart = year - 25;
-  const yearEnd = year + 25;
+  const yearStart = year - 30;
+  const yearEnd = year + 30;
+  // 只查歷史事件、戰役、條約、革命等有意義的類型
   const sparql = `
-SELECT DISTINCT ?item ?itemLabel ?lat ?lon ?typeLabel WHERE {
+SELECT DISTINCT ?item ?itemLabel ?itemLabelZh ?lat ?lon ?typeOf WHERE {
   ?item wdt:P585 ?date .
   FILTER(YEAR(?date) >= ${yearStart} && YEAR(?date) <= ${yearEnd})
   ?item wdt:P625 ?coord .
   BIND(geof:latitude(?coord) AS ?lat)
   BIND(geof:longitude(?coord) AS ?lon)
-  OPTIONAL { ?item wdt:P31 ?type }
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "${currentLang==='zh'?'zh,en':'en'}". }
-} LIMIT 30`;
+  ?item wdt:P31 ?typeOf .
+  VALUES ?typeOf {
+    wd:Q198 wd:Q178561 wd:Q13418847 wd:Q132241
+    wd:Q7210356 wd:Q189760 wd:Q8091 wd:Q180684
+    wd:Q2199864 wd:Q3839081 wd:Q831663 wd:Q645883
+  }
+  OPTIONAL {
+    ?item rdfs:label ?itemLabelZh .
+    FILTER(LANG(?itemLabelZh)="zh")
+  }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "zh,en". }
+} LIMIT 25`;
 
   const url = 'https://query.wikidata.org/sparql?format=json&query='+encodeURIComponent(sparql);
   try{
-    const res = await fetch(url,{headers:{Accept:'application/sparql-results+json'}});
+    const res = await fetch(url,{headers:{Accept:'application/sparql-results+json'},signal:AbortSignal.timeout(8000)});
     if(!res.ok) return;
     const data = await res.json();
     data.results.bindings.forEach(b=>{
       const lat = parseFloat(b.lat?.value);
       const lon = parseFloat(b.lon?.value);
       if(!lat||!lon||isNaN(lat)||isNaN(lon)) return;
-      // 避免跟內建資料重疊（距離>0.5度）
-      const dup = HISTORY_DATA.some(d=>Math.abs(d.lat-lat)<0.5&&Math.abs(d.lng-lon)<0.5);
+      const typeQid = (b.typeOf?.value||'').split('/').pop();
+      if(WD_EXCLUDE_TYPES.has(typeQid)) return;
+      // 避免跟內建資料重疊
+      const dup = HISTORY_DATA.some(d=>Math.abs(d.lat-lat)<0.8&&Math.abs(d.lng-lon)<0.8);
       if(dup) return;
-      const label = b.itemLabel?.value||'';
-      if(!label || label.startsWith('Q')) return;
+      const labelEn = b.itemLabel?.value||'';
+      const labelZh = b.itemLabelZh?.value||labelEn;
+      if(!labelEn || labelEn.startsWith('Q') || labelEn.match(/^\d/)) return;
+      const qid = b.item.value.split('/').pop();
       const wdItem = {
-        id:'wd_'+b.item.value.split('/').pop(),
+        id:'wd_'+qid,
         type:'event',lat,lng:lon,
         year,endYear:year,
-        zh:label,en:label,
-        tags_zh:['Wikidata'],tags_en:['Wikidata'],
-        wiki_en:null,wd_id:b.item.value.split('/').pop()
+        zh:labelZh,en:labelEn,
+        tags_zh:['Wikidata補充'],tags_en:['via Wikidata'],
+        wiki_zh:labelZh!==labelEn?labelZh:null,
+        wiki_en:null,
+        wd_id:qid
       };
-      const m = L.marker([lat,lon],{icon:makeIcon('event'),opacity:.7})
+      const m = L.marker([lat,lon],{icon:makeIcon('event'),opacity:.75})
         .addTo(map)
         .on('click',()=>openEntry(wdItem));
       allMarkers.push(m);
@@ -858,55 +947,83 @@ SELECT DISTINCT ?item ?itemLabel ?lat ?lon ?typeLabel WHERE {
 }
 
 // ═══════════════════════════════════════════════════════
-//  側欄：開啟條目
+//  側欄導航
 // ═══════════════════════════════════════════════════════
-function openEntry(d){
+function navBack(){
+  if(navHistory.length===0) return;
+  const prev = navHistory.pop();
+  openEntry(prev, true); // true = 不推入歷史
+  updateNavBar();
+}
+function updateNavBar(){
+  const nav = document.getElementById('panel-nav');
+  const crumbs = document.getElementById('panel-nav-crumbs');
+  if(navHistory.length>0){
+    nav.style.display='flex';
+    const isZh = currentLang==='zh';
+    crumbs.textContent = navHistory.map(h=>isZh?h.zh:h.en).join(' › ');
+  } else {
+    nav.style.display='none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  側欄：開啟條目（完整重寫）
+// ═══════════════════════════════════════════════════════
+function openEntry(d, isBack=false){
+  if(!isBack && currentEntry && currentEntry.id!==d.id){
+    navHistory.push(currentEntry);
+    if(navHistory.length>10) navHistory.shift();
+  }
+  currentEntry = d;
+  updateNavBar();
+
   document.getElementById('welcome').style.display='none';
   const card = document.getElementById('entry-card');
   card.style.display='block';
 
   const isZh = currentLang==='zh';
-  const typeLabelMap={event:{zh:'歷史事件',en:'Historical Event'},person:{zh:'人物',en:'Person'},artifact:{zh:'文物',en:'Artifact'},building:{zh:'建築',en:'Building'},regime:{zh:'政權',en:'Regime'}};
-  const tl = typeLabelMap[d.type]||{zh:'條目',en:'Entry'};
-
+  const typeLabelMap={
+    event:{zh:'歷史事件',en:'HISTORICAL EVENT'},
+    person:{zh:'人 物',en:'PERSON'},
+    artifact:{zh:'文 物',en:'ARTIFACT'},
+    building:{zh:'建 築',en:'BUILDING'},
+    regime:{zh:'政 權',en:'REGIME'}
+  };
+  const tl = typeLabelMap[d.type]||{zh:'條目',en:'ENTRY'};
   document.getElementById('entry-type-badge').textContent = isZh?tl.zh:tl.en;
   document.getElementById('entry-name').textContent = isZh?d.zh:d.en;
   document.getElementById('entry-name-en').textContent = isZh?d.en:d.zh;
 
-  // 年份顯示
-  const yStr = d.year<0?`西元前 ${Math.abs(d.year)} 年`:`西元 ${d.year} 年`;
-  const yStrEn = d.year<0?`${Math.abs(d.year)} BCE`:`${d.year} CE`;
-  const eyStr = d.endYear&&d.endYear!==d.year?(d.year<0?` — 西元前 ${Math.abs(d.endYear)} 年`:` — ${d.endYear} 年`):'';
-  document.getElementById('entry-year').textContent = isZh?(yStr+eyStr):(yStrEn+(d.endYear&&d.endYear!==d.year?` — ${d.endYear} CE`:''));
+  // 年份
+  const yFmt = y => y<0?(isZh?`西元前 ${Math.abs(y)} 年`:`${Math.abs(y)} BCE`):(isZh?`西元 ${y} 年`:`${y} CE`);
+  const ey = d.endYear&&d.endYear!==d.year?` — ${yFmt(d.endYear)}`:'';
+  document.getElementById('entry-year').textContent = yFmt(d.year)+ey;
 
-  // 標籤
+  // 標籤（內建 + Wikidata 動態）
   const tags = isZh?(d.tags_zh||[]):(d.tags_en||[]);
   document.getElementById('entry-tags').innerHTML = tags.map(t=>`<span class="tag">${t}</span>`).join('');
 
-  // 圖片先隱藏
+  // 圖片、摘述、連結先重置
   document.getElementById('entry-img-wrap').style.display='none';
-
-  // 摘述先顯示載入中
   const ex = document.getElementById('entry-extract');
   ex.className='entry-extract loading';
   ex.textContent = isZh?'資料載入中…':'Loading...';
+  document.getElementById('entry-links').innerHTML='';
 
-  // 連結
-  const linksEl = document.getElementById('entry-links');
-  linksEl.innerHTML='';
-  if(d.wiki_zh||d.wiki_en){
-    const wikiUrl = isZh&&d.wiki_zh
-      ?`https://zh.wikipedia.org/wiki/${encodeURIComponent(d.wiki_zh)}`
-      :`https://en.wikipedia.org/wiki/${encodeURIComponent(d.wiki_en||d.wiki_zh)}`;
-    linksEl.innerHTML=`<a class="entry-link" href="${wikiUrl}" target="_blank">◈ Wikipedia</a>`;
-  }
+  // 隱藏關聯區塊（等抓到再顯示）
+  document.getElementById('entry-causes').style.display='none';
+  document.getElementById('entry-effects').style.display='none';
+  document.getElementById('entry-related').style.display='none';
 
-  // 非同步抓 Wikipedia
+  // 非同步抓 Wikipedia + Wikidata 關聯
   fetchWikiSummary(d);
+  if(d.wd_id) fetchWikidataRelations(d);
+  else fetchWikidataRelationsByTitle(d);
 }
 
 function openRegimeEntry(r){
-  const fakeEntry = {
+  const fakeEntry={
     id:'regime_'+r.name_en.replace(/ /g,'_'),
     type:'regime',lat:r.coords[0][0],lng:r.coords[0][1],
     year:r.yearStart,endYear:r.yearEnd,
@@ -918,62 +1035,86 @@ function openRegimeEntry(r){
 }
 
 // ═══════════════════════════════════════════════════════
-//  Wikipedia API 抓取
+//  Wikipedia API 抓取（強化版）
 // ═══════════════════════════════════════════════════════
 const wikiCache={};
 async function fetchWikiSummary(d){
   const isZh = currentLang==='zh';
-  const lang = isZh?'zh':'en';
-  const title = isZh?(d.wiki_zh||d.wiki_en||d.zh):(d.wiki_en||d.wiki_zh||d.en);
-  if(!title){
-    setExtract(isZh?'暫無詳細資料。':'No detailed information available.');
-    return;
+
+  // 決定查詢順序
+  let attempts = [];
+  if(isZh){
+    if(d.wiki_zh) attempts.push({lang:'zh',title:d.wiki_zh});
+    if(d.wd_id) attempts.push({lang:'zh',wd:d.wd_id}); // 用 wikidata ID 查 zh sitelink
+    if(d.wiki_en) attempts.push({lang:'en',title:d.wiki_en});
+    attempts.push({lang:'zh',title:d.zh});
+  } else {
+    if(d.wiki_en) attempts.push({lang:'en',title:d.wiki_en});
+    if(d.wd_id) attempts.push({lang:'en',wd:d.wd_id});
+    if(d.wiki_zh) attempts.push({lang:'zh',title:d.wiki_zh});
+    attempts.push({lang:'en',title:d.en});
   }
-  const cacheKey = lang+'_'+title;
-  if(wikiCache[cacheKey]){
-    applyWikiData(wikiCache[cacheKey]);
-    return;
-  }
-  const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
-  try{
-    const res = await fetch(url);
-    if(!res.ok) throw new Error('not found');
-    const data = await res.json();
-    wikiCache[cacheKey]=data;
-    applyWikiData(data);
-  }catch(e){
-    // fallback: 嘗試英文
-    if(isZh&&d.wiki_en){
-      try{
-        const res2 = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(d.wiki_en)}`);
-        if(res2.ok){const data2=await res2.json();wikiCache[cacheKey]=data2;applyWikiData(data2);return;}
-      }catch(e2){}
+
+  for(const attempt of attempts){
+    let url, cacheKey;
+    if(attempt.wd){
+      // 先查 Wikidata 拿 sitelink，再查 Wikipedia
+      const sitelink = await getWikidataSitelink(attempt.wd, attempt.lang);
+      if(!sitelink) continue;
+      attempt.title = sitelink;
     }
-    setExtract(isZh?'目前無法載入資料，請稍後再試。':'Could not load data. Please try again.');
+    cacheKey = attempt.lang+'__'+attempt.title;
+    if(wikiCache[cacheKey]){applyWikiData(wikiCache[cacheKey],d);return;}
+    url = `https://${attempt.lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(attempt.title.replace(/ /g,'_'))}`;
+    try{
+      const res = await fetch(url,{signal:AbortSignal.timeout(6000)});
+      if(!res.ok) continue;
+      const data = await res.json();
+      if(!data.extract||data.extract.length<20) continue;
+      wikiCache[cacheKey]=data;
+      applyWikiData(data,d);
+      return;
+    }catch(e){continue;}
   }
+  setExtract(isZh?'目前無法取得資料，請點擊下方連結前往維基百科。':'Could not load summary. Please visit Wikipedia via the link below.');
 }
 
-function applyWikiData(data){
+// 從 Wikidata 取得 Wikipedia sitelink
+const sitelinkCache={};
+async function getWikidataSitelink(qid, lang){
+  const key = qid+'_'+lang;
+  if(sitelinkCache[key]!==undefined) return sitelinkCache[key];
+  try{
+    const url = `https://www.wikidata.org/wiki/Special:EntityData/${qid}.json`;
+    const res = await fetch(url,{signal:AbortSignal.timeout(5000)});
+    if(!res.ok){sitelinkCache[key]=null;return null;}
+    const data = await res.json();
+    const entity = data.entities[qid];
+    const sitekey = lang==='zh'?'zhwiki':'enwiki';
+    const title = entity?.sitelinks?.[sitekey]?.title||null;
+    sitelinkCache[key]=title;
+    return title;
+  }catch(e){sitelinkCache[key]=null;return null;}
+}
+
+function applyWikiData(data, d){
   const ex = document.getElementById('entry-extract');
   ex.className='entry-extract';
   ex.textContent = data.extract||'No summary available.';
 
-  // 圖片
-  if(data.thumbnail&&data.thumbnail.source){
-    const imgWrap = document.getElementById('entry-img-wrap');
-    const img = document.getElementById('entry-img');
-    img.src = data.thumbnail.source;
+  if(data.thumbnail?.source){
+    const imgWrap=document.getElementById('entry-img-wrap');
+    const img=document.getElementById('entry-img');
+    img.src=data.thumbnail.source;
     img.onerror=()=>imgWrap.style.display='none';
     imgWrap.style.display='block';
   }
 
-  // 補充維基連結
-  if(data.content_urls){
-    const linksEl = document.getElementById('entry-links');
-    if(!linksEl.querySelector('a')){
-      const url = data.content_urls.desktop?.page||'';
-      if(url) linksEl.innerHTML=`<a class="entry-link" href="${url}" target="_blank">◈ Wikipedia</a>`;
-    }
+  // 補連結
+  const linksEl=document.getElementById('entry-links');
+  const wikiPageUrl = data.content_urls?.desktop?.page;
+  if(wikiPageUrl&&!linksEl.querySelector('a[data-wiki]')){
+    linksEl.insertAdjacentHTML('afterbegin',`<a class="entry-link" href="${wikiPageUrl}" target="_blank" data-wiki="1">◈ Wikipedia</a>`);
   }
 }
 
@@ -981,6 +1122,164 @@ function setExtract(txt){
   const ex=document.getElementById('entry-extract');
   ex.className='entry-extract';
   ex.textContent=txt;
+}
+
+// ═══════════════════════════════════════════════════════
+//  Wikidata 關聯查詢（前因後果 + 相關人物政權）
+// ═══════════════════════════════════════════════════════
+const relCache={};
+
+async function fetchWikidataRelationsByTitle(d){
+  // 沒有 wd_id 的內建條目，先查 Wikidata 取得 QID
+  if(!d.wiki_en && !d.wiki_zh) return;
+  const title = d.wiki_en||d.wiki_zh;
+  const cacheKey = 'qid_'+title;
+  if(relCache[cacheKey]==='miss') return;
+  if(relCache[cacheKey]){
+    d.wd_id = relCache[cacheKey];
+    fetchWikidataRelations(d);
+    return;
+  }
+  try{
+    const url = `https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&titles=${encodeURIComponent(title)}&format=json&origin=*`;
+    const res = await fetch(url,{signal:AbortSignal.timeout(5000)});
+    const data = await res.json();
+    const pages = data.query?.pages||{};
+    const page = Object.values(pages)[0];
+    const qid = page?.pageprops?.wikibase_item;
+    if(qid){
+      relCache[cacheKey]=qid;
+      d.wd_id=qid;
+      fetchWikidataRelations(d);
+    } else {
+      relCache[cacheKey]='miss';
+    }
+  }catch(e){}
+}
+
+async function fetchWikidataRelations(d){
+  const qid = d.wd_id;
+  if(!qid) return;
+  if(relCache[qid]){renderRelations(relCache[qid],d);return;}
+
+  const isZh = currentLang==='zh';
+  const langPref = isZh?'zh,en':'en,zh';
+
+  // P155=前繼事件, P156=後繼事件, P1542=有此影響, P828=有此起因
+  // P710=參與者, P17=所在國家, P927=行政轄區, P1269=構面(相關)
+  const sparql = `
+SELECT ?rel ?relLabel ?relLabelZh ?prop ?typeOf WHERE {
+  {
+    wd:${qid} ?p ?rel .
+    VALUES ?p { wdt:P155 wdt:P156 wdt:P1542 wdt:P828 wdt:P710 wdt:P17 wdt:P131 }
+    BIND(STR(?p) AS ?prop)
+  }
+  OPTIONAL { ?rel wdt:P31 ?typeOf }
+  OPTIONAL {
+    ?rel rdfs:label ?relLabelZh .
+    FILTER(LANG(?relLabelZh)="zh")
+  }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "${langPref}". }
+} LIMIT 30`;
+
+  const url = 'https://query.wikidata.org/sparql?format=json&query='+encodeURIComponent(sparql);
+  try{
+    const res = await fetch(url,{headers:{Accept:'application/sparql-results+json'},signal:AbortSignal.timeout(8000)});
+    if(!res.ok) return;
+    const data = await res.json();
+    relCache[qid]=data.results.bindings;
+    renderRelations(data.results.bindings,d);
+  }catch(e){}
+}
+
+function renderRelations(bindings, d){
+  const isZh = currentLang==='zh';
+  const causes=[],effects=[],related=[];
+
+  const propMap={
+    'http://www.wikidata.org/prop/direct/P155':'cause',
+    'http://www.wikidata.org/prop/direct/P828':'cause',
+    'http://www.wikidata.org/prop/direct/P156':'effect',
+    'http://www.wikidata.org/prop/direct/P1542':'effect',
+    'http://www.wikidata.org/prop/direct/P710':'related',
+    'http://www.wikidata.org/prop/direct/P17':'related',
+    'http://www.wikidata.org/prop/direct/P131':'related',
+  };
+
+  const typeIconMap={
+    'Q5':'👤','Q6256':'🏴','Q3624078':'🏴','Q7275':'🏛',
+    'Q198':'⚔','Q178561':'⚔','Q4421':'🌿',
+  };
+
+  bindings.forEach(b=>{
+    const labelEn = b.relLabel?.value||'';
+    const labelZh = b.relLabelZh?.value||labelEn;
+    if(!labelEn||labelEn.startsWith('Q')) return;
+    const prop = b.prop?.value||'';
+    const bucket = propMap[prop]||'related';
+    const qid = b.rel?.value?.split('/').pop();
+    const typeQid = b.typeOf?.value?.split('/').pop()||'';
+    const icon = typeIconMap[typeQid]||'◈';
+    const item = {label:isZh?labelZh:labelEn,icon,qid};
+    if(bucket==='cause') causes.push(item);
+    else if(bucket==='effect') effects.push(item);
+    else related.push(item);
+  });
+
+  // 去重
+  const dedup = arr => {
+    const seen=new Set();
+    return arr.filter(x=>{if(seen.has(x.label))return false;seen.add(x.label);return true;});
+  };
+
+  renderRelationSection('entry-causes','entry-causes-list',dedup(causes),'cause',d);
+  renderRelationSection('entry-effects','entry-effects-list',dedup(effects),'effect',d);
+  renderRelatedChips(dedup(related));
+}
+
+function renderRelationSection(sectionId,listId,items,role,d){
+  if(items.length===0) return;
+  const section=document.getElementById(sectionId);
+  const list=document.getElementById(listId);
+  section.style.display='block';
+  const isZh=currentLang==='zh';
+  list.innerHTML=items.slice(0,6).map(item=>`
+    <div class="relation-item" onclick="openRelatedEntry('${item.qid}','${escHtml(item.label)}','${role}')">
+      <span class="relation-arrow">${role==='cause'?'◂':'▸'}</span>
+      <div>
+        <div class="relation-name">${item.icon} ${escHtml(item.label)}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderRelatedChips(items){
+  if(items.length===0) return;
+  const el=document.getElementById('entry-related');
+  const chips=document.getElementById('entry-related-chips');
+  el.style.display='block';
+  chips.innerHTML=items.slice(0,10).map(item=>`
+    <span class="related-chip" onclick="openRelatedEntry('${item.qid}','${escHtml(item.label)}','related')">
+      ${item.icon} ${escHtml(item.label)}
+    </span>`).join('');
+}
+
+function escHtml(s){return (s||'').replace(/'/g,"&#39;").replace(/"/g,"&quot;")}
+
+// 點擊相關條目 → 建立臨時 entry 並開啟
+async function openRelatedEntry(qid,label,role){
+  if(!qid) return;
+  // 先看 HISTORY_DATA 有沒有
+  const found = HISTORY_DATA.find(x=>x.wd_id===qid);
+  if(found){openEntry(found);return;}
+  // 臨時條目
+  const tmpEntry={
+    id:'tmp_'+qid,type:'event',lat:0,lng:0,
+    year:0,endYear:0,
+    zh:label,en:label,
+    tags_zh:['相關條目'],tags_en:['Related'],
+    wd_id:qid,wiki_zh:null,wiki_en:null
+  };
+  openEntry(tmpEntry);
 }
 
 // ═══════════════════════════════════════════════════════
